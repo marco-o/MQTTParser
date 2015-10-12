@@ -43,6 +43,9 @@ typedef struct mqtt_text_s
 	uint8_t *text;
 } mqtt_text_t;
 
+void mqtt_text_init(mqtt_text_t *self, const char *text);
+
+
 typedef struct mqtt_basic_s
 {
 	uint8_t byte1;
@@ -113,7 +116,7 @@ typedef struct mqtt_message_s
 void mqtt_packet_init(mqtt_packet_t *, uint8_t *data, int size);
 
 void mqtt_connect_build(mqtt_message_t *, const char *client_id, int clean, uint16_t keepalive);
-void mqtt_connect_userpass(mqtt_message_t *, const char *username, const char *password, int passlen);
+void mqtt_connect_credentials(mqtt_message_t *, const char *username, const char *password, int passlen);
 void mqtt_connect_will(mqtt_message_t *self, int will_retain, int will_qos,
 						const char *will_topic, int topic_len,
 						const char *will_message, int msg_len) ;
@@ -134,5 +137,6 @@ void mqtt_unsubscribe_build(mqtt_message_t *self, uint16_t *msgid, const char *t
 /* Functions to encode/decode a message to/from a packet */
 void mqtt_message_read(mqtt_message_t *data, mqtt_packet_t *packet);
 void mqtt_message_write(mqtt_message_t *data,mqtt_packet_t *packet);
+int mqtt_message_peek(mqtt_message_t *data, mqtt_packet_t *packet);
 
 #endif

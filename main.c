@@ -27,27 +27,10 @@ static const char *msg_name[] =
 	"DISCONNECT",
 };
 
-int client_connect(int argc, char *argv[])
+int client_connect(const char *host, const char *port)
 {
-	const char *host = "localhost";
-	const char *port = "1883";
-	int sockfd = -1;
 	struct addrinfo hints, *servinfo, *p;
-	int i, rv;
-
-#ifdef WIN32
-	WSADATA wsaData;   // if this doesn't work
-
-	if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
-		fprintf(stderr, "WSAStartup failed.\n");
-		exit(1);
-	}
-#endif
-	for (i = 0; i < argc; i++)
-		if (strncmp("--host=", argv[i], 7) == 0)
-			host = argv[i] + 7;
-		else if (strncmp("--port=", argv[i], 7) == 0)
-			port = argv[i] + 7;
+	int rv, sockfd = -1;
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;
@@ -79,21 +62,40 @@ int client_connect(int argc, char *argv[])
 	return sockfd;
 }
 
+int mqtt_send_message(mqtt_message_t *self, int sock)
+{
+	uint8_t buffer[128];
+	mqtt_packet_t packet;
+
+	mqtt_packet_init(&packet, buffer, sizeof(buffer));
+	mqtt_message_write(self, &packet);
+	if (packet.head > packet.size)
+		return -1;
+	send(sock, (const char *)packet.data, packet.head, 0);
+	return 0;
+}
+
 int client_test(int argc, char *argv[])
 {
-	int sockfd;
+	int i, sockfd;
 	mqtt_message_t message;
 	mqtt_packet_t packet;
 	uint8_t buffer[128];
 	uint16_t msgid = 1;
+	const char *host = "localhost";
+	const char *port = "1883";
 
-	if ((sockfd = client_connect(argc, argv)) < 0)
+	for (i = 0; i < argc; i++)
+		if (strncmp("--host=", argv[i], 7) == 0)
+			host = argv[i] + 7;
+		else if (strncmp("--port=", argv[i], 7) == 0)
+			port = argv[i] + 7;
+
+	if ((sockfd = client_connect(host, port)) < 0)
 		return -1;
 
 	mqtt_connect_build(&message, "test", 1, 300);
-	mqtt_packet_init(&packet, buffer, sizeof(buffer));
-	mqtt_message_write(&message, &packet);
-	send(sockfd, (const char *)packet.data, packet.head, 0);
+	mqtt_send_message(&message, sockfd);
 	/*
 	// waiting connack
 	mqtt_packet_init(&packet, buffer, sizeof(buffer));
@@ -104,15 +106,11 @@ int client_test(int argc, char *argv[])
 	*/
 	// publish something
 	mqtt_publish_build(&message, 0, 0, NULL, "abc", "def", 3);
-	mqtt_packet_init(&packet, buffer, sizeof(buffer));
-	mqtt_message_write(&message, &packet);
-	send(sockfd, (const char *)packet.data, packet.head, 0);
+	mqtt_send_message(&message, sockfd);
 
 	// subscribe
 	mqtt_va_subscribe_build(&message, &msgid, "abc", 1, "xyz", 2, NULL);
-	mqtt_packet_init(&packet, buffer, sizeof(buffer));
-	mqtt_message_write(&message, &packet);
-	send(sockfd, (const char *)packet.data, packet.head, 0);
+	mqtt_send_message(&message, sockfd);
 
 	int count;
 	for (count = 0; count < 8; ++count)
@@ -127,34 +125,41 @@ int client_test(int argc, char *argv[])
 		    {
 				char topic[20] = { 0 };
 				char msgtext[40] = {0};
-				strncpy(topic, message.variable.publish.topic.text, message.variable.publish.topic.length);
-				strncpy(msgtext, message.payload.publish.text, message.payload.publish.length);
+				strncpy(topic, (const char *)message.variable.publish.topic.text, message.variable.publish.topic.length);
+				strncpy(msgtext, (const char *)message.payload.publish.text, message.payload.publish.length);
 				printf("Data in: %s %s\n", topic, msgtext);
 		    }
 			if ((message.header.ctrl >> 1) & 3)
 			{
 				mqtt_pub_xxx_build(&message, PUBACK, message.variable.publish.packetid);
-				mqtt_packet_init(&packet, buffer, sizeof(buffer));
-				mqtt_message_write(&message, &packet);
-				send(sockfd, (const char *)packet.data, packet.head, 0);
+				mqtt_send_message(&message, sockfd);
 			}
 			break;
 		}
 	}
 
 	mqtt_disconnect_build(&message);
-	mqtt_packet_init(&packet, buffer, sizeof(buffer));
-	mqtt_message_write(&message, &packet);
-	send(sockfd, (const char *)packet.data, packet.head, 0);
+	mqtt_send_message(&message, sockfd);
+
 	close(sockfd);
 	return 0;
 }
 
 int main(int argc, char *argv[])
 {
+#ifdef WIN32
+	WSADATA wsaData;   // if this doesn't work
+
+	if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
+		fprintf(stderr, "WSAStartup failed.\n");
+		exit(1);
+	}
+#endif
 	for (int i = 1; i < argc; i++)
-		if (strcmp("--client", argv[i]) == 0)
-			return client_test(argc, argv) ;
+	if (strcmp("--client", argv[i]) == 0)
+		return client_test(argc, argv);
+	else if (strcmp("--loop", argv[i]) == 0)
+		mqtt_client_test("localhost", "1883");
 	return 0;
 }
 

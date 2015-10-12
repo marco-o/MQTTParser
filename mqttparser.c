@@ -243,12 +243,22 @@ void mqtt_message_exx(mqtt_packet_t *packet, mqtt_message_t *data, mqtt_exchange
 	}
 }
 
+int mqtt_message_peek(mqtt_message_t *data, mqtt_packet_t *packet)
+{
+	int result;
+	mqtt_packet_pop_byte(packet, &data->header.ctrl);
+	mqtt_packet_pop_length(packet, &data->header.length);
+	result = packet->head + data->header.length;
+	packet->head = 0;
+	return result;
+}
+
 void mqtt_message_read(mqtt_message_t *data, mqtt_packet_t *packet)
 {
 	mqtt_packet_pop_byte(packet, &data->header.ctrl);
 	mqtt_packet_pop_length(packet, &data->header.length);
 	if (packet->size > packet->head + data->header.length)
-		packet->size = packet->head + data->header.length; // to exit subscribe/unsibs loops
+		packet->size = packet->head + data->header.length; // to exit subscribe/unsubs loops and publish msg
 	mqtt_message_exx(packet, data, &reader);
 }
 
@@ -265,7 +275,7 @@ void mqtt_message_write(mqtt_message_t *data, mqtt_packet_t *packet)
 	mqtt_message_exx(packet, data, &writer);
 }
 
-static void mqtt_text_init(mqtt_text_t *self, const char *text)
+void mqtt_text_init(mqtt_text_t *self, const char *text)
 {
 	self->text = (uint8_t *)text;
 	self->length = (uint16_t)strlen(text);
@@ -292,7 +302,7 @@ void mqtt_disconnect_build(mqtt_message_t *self)
 	self->header.length = 0;
 }
 
-void mqtt_connect_userpass(mqtt_message_t *self, const char *username, const char *password, int passlen)
+void mqtt_connect_credentials(mqtt_message_t *self, const char *username, const char *password, int passlen)
 {
 	mqtt_connect_payload_t *connect = &self->payload.connect;
 	self->variable.connect.flags |= 0xC0;
