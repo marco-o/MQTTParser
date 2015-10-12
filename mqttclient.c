@@ -1,9 +1,17 @@
 #include "mqttparser.h"
 #include <string.h>
+#include <stdio.h>
 #ifdef WIN32
 #include <WinSock2.h>
 #include <ws2tcpip.h>
 #define close closesocket
+#else
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <unistd.h>
 #endif
 
 
@@ -150,6 +158,9 @@ void mqtt_client_test(const char *host, const char *port)
 	mqtt_client_t client;
 	mqtt_client_init(&client, "test", 0, 300);
 	mqtt_client_callbacks(&client, on_test_connect, on_test_publish);
+    printf("Starting client test\n") ;
 	if (mqtt_client_connect(&client, host, port))
 		mqtt_client_loop(&client);
+    else
+        printf("Client test failed\n") ;
 }
