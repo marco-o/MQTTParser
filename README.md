@@ -23,3 +23,5 @@ At this point packet is ready and can be sent over e.g. a socket with the follow
 
     send(sock, (const char *)packet.data, packet.head, 0);
 
+If the provided buffer is not big enough for the message then packet.head will contain the required size for
+the buffer. Anyway no data is written outside the available buffer.
